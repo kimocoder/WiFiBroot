@@ -142,11 +142,9 @@ class Pully:
 	def support_colors(self):
 		plat = sys.platform
 		supported_platform = plat != 'Pocket PC' and (plat != 'win32' or \
-														'ANSICON' in os.environ)
+															'ANSICON' in os.environ)
 		is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
-		if not supported_platform or not is_a_tty:
-			return False
-		return True
+		return bool(supported_platform and is_a_tty)
 
 
 	def win_colors(self):
@@ -164,41 +162,40 @@ class Pully:
 		self.LINEUP = ''
 
 	def info(self, statement, *args, **kwargs):
-		print("%s[*]%s %s" % (self.BOLD+self.YELLOW, self.END, statement))
+		print(f"{self.BOLD + self.YELLOW}[*]{self.END} {statement}")
 		return
 
 	def error(self, statement, *args, **kwargs):
-		print("%s[!]%s %s" % (self.BOLD+self.RED, self.END, statement))
+		print(f"{self.BOLD + self.RED}[!]{self.END} {statement}")
 		return
 
 	def up(self, statement, *args, **kwargs):
-		print("%s[^]%s %s" % (self.BOLD+self.BLUE, self.END, statement))
+		print(f"{self.BOLD + self.BLUE}[^]{self.END} {statement}")
 		return
 
 	def use(self, statement, *args, **kwargs):
-		print("%s[+]%s %s" % (self.BOLD+self.GREEN, self.END, statement))
+		print(f"{self.BOLD + self.GREEN}[+]{self.END} {statement}")
 		return
 
 	def question(self, statement, *args, **kwargs):
-		q = raw_input("%s[?]%s %s" % (self.BOLD+self.PURPLE, self.END, statement))
-		return q
+		return raw_input(f"{self.BOLD + self.PURPLE}[?]{self.END} {statement}")
 
 	def delete(self, statement, *args, **kwargs):
-		print("%s[#]%s %s" % (self.BOLD+self.CYAN, self.END, statement))
+		print(f"{self.BOLD + self.CYAN}[#]{self.END} {statement}")
 		return
 
 	def special(self, statement, *args, **kwargs):
-		print("%s[~]%s %s" % (self.BOLD+self.RED, self.END, statement))
+		print(f"{self.BOLD + self.RED}[~]{self.END} {statement}")
 
 	def spacer(self, statement, *args, **kwargs):
-		print("    %s" % (statement))
+		print(f"    {statement}")
 
 	def linebreak(self):
 		print("\n")
 		return
 
 	def right(self, statement, *args, **kwargs):
-		print("%s[>]%s %s" % (self.BOLD+self.DARKCYAN, self.END, statement))
+		print(f"{self.BOLD + self.DARKCYAN}[>]{self.END} {statement}")
 
 	def lineup(self, *args, **kwargs):
 		sys.stdout.write(self.LINEUP)

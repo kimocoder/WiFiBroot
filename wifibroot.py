@@ -55,59 +55,48 @@ class interface:
 		if self.is_iface(self.iface):
 			if self.is_man(self.iface):
 				return True
-			else:
-				self.check_help = "Wireless interface isn't in Managed Mode"
-				return False
+			self.check_help = "Wireless interface isn't in Managed Mode"
 		else:
-			self.check_help = "There's no such interface: %s" % (self.iface)
-			return False
+			self.check_help = f"There's no such interface: {self.iface}"
+
+		return False
 
 	def check_mon(self):
 		if self.is_iface(self.iface):
 			if self.is_mon(self.iface):
 				return True
-			else:
-				self.check_help = "Wireless interface isn't in Monitor Mode"
-				return False
+			self.check_help = "Wireless interface isn't in Monitor Mode"
 		else:
-			self.check_help = "There's no such interface: %s" % (self.iface)
-			return False
+			self.check_help = f"There's no such interface: {self.iface}"
+
+		return False
 
 	def list_ifaces(self):
 		ifaces = []
-		dev = open('/proc/net/dev', 'r')
-		data = dev.read()
-		for facecard in re.findall('[a-zA-Z0-9]+:', data):
-			ifaces.append(facecard.rstrip(":"))
-		dev.close()
+		with open('/proc/net/dev', 'r') as dev:
+			data = dev.read()
+			ifaces.extend(
+				facecard.rstrip(":") for facecard in re.findall('[a-zA-Z0-9]+:', data)
+			)
 		return ifaces
 
 	def is_iface(self, iface):
-		if iface in self.interfaces:
-			return True
-		else:
-			return False
+		return iface in self.interfaces
 
 	def is_mon(self, iface):
 		co = subprocess.Popen(['iwconfig', iface], stdout=subprocess.PIPE)
 		data = co.communicate()[0]
 		card = re.findall('Mode:[A-Za-z]+', data)[0]
-		if "Monitor" in card:
-			return True
-		else:
-			return False
+		return "Monitor" in card
 
 	def is_man(self, iface):
 		co = subprocess.Popen(['iwconfig', iface], stdout=subprocess.PIPE)
 		data = co.communicate()[0]
 		card = re.findall('Mode:[A-Za-z]+', data)[0]
-		if "Managed" in card:
-			return True
-		else:
-			return False
+		return "Managed" in card
 
 	def put_channel(self, ch):
-		os.system('iwconfig %s channel %s' % (self.iface, ch))
+		os.system(f'iwconfig {self.iface} channel {ch}')
 		self.cch = int(ch)
 		return ch
 
@@ -126,7 +115,7 @@ class interface:
 			time.sleep(0.40)
 			os.system('iwconfig %s channel %d' % (self.iface, n))
 			dig = int(random.random() * 14)
-			if dig != 0 and dig != n:
+			if dig not in [0, n]:
 				n = dig
 		self.__STATUS_END = 1
 
@@ -169,15 +158,33 @@ class Sniffer:
 		del self.screen
 		signal( SIGINT, _HANDLER )
 
-		if V__:
-			__HEADERS = [pull.BOLD+'NO', 'ESSID', 'PWR', 'ENC', 'CIPHER', 'AUTH', 'CH', 'BSSID', 'VENDOR', 'CL'+pull.END]
-		else:
-			__HEADERS = [pull.BOLD+'NO', 'ESSID', 'PWR', 'ENC', 'CIPHER', 'AUTH', 'CH', 'BSSID'+pull.END]
 		tabulator__ = []
-		###
-		__sig_LIST = []
-		for ap in self.shift.results():
-			__sig_LIST.append(ap['pwr'])
+		__HEADERS = (
+			[
+				f'{pull.BOLD}NO',
+				'ESSID',
+				'PWR',
+				'ENC',
+				'CIPHER',
+				'AUTH',
+				'CH',
+				'BSSID',
+				'VENDOR',
+				f'CL{pull.END}',
+			]
+			if V__
+			else [
+				f'{pull.BOLD}NO',
+				'ESSID',
+				'PWR',
+				'ENC',
+				'CIPHER',
+				'AUTH',
+				'CH',
+				f'BSSID{pull.END}',
+			]
+		)
+		__sig_LIST = [ap['pwr'] for ap in self.shift.results()]
 		__sig_LIST = sorted(__sig_LIST, reverse=True)
 		###
 		count = 1
@@ -191,10 +198,10 @@ class Sniffer:
 		for ap in self.WiFiAP:
 			if V__:
 				tabulator__.append([ap['count'], pull.GREEN+ap['essid']+pull.END, ap['pwr'], ap['auth'], ap['cipher'], \
-						ap['psk'], ap['channel'], ap['bssid'].upper(), pull.DARKCYAN+ap['vendor']+pull.END, ap['clients'] ])
+							ap['psk'], ap['channel'], ap['bssid'].upper(), pull.DARKCYAN+ap['vendor']+pull.END, ap['clients'] ])
 			else:
 				tabulator__.append([ap['count'], pull.GREEN+ap['essid']+pull.END, ap['pwr'], ap['auth'], ap['cipher'], \
-						ap['psk'], ap['channel'], ap['bssid'].upper()])
+							ap['psk'], ap['channel'], ap['bssid'].upper()])
 		print("\n"+tabulate(tabulator__, headers=__HEADERS)+"\n")
 		os.kill(os.getpid(), SIGINT)
 
@@ -208,10 +215,7 @@ class pmkid_GEN:
 		self.channel = self.channel(self.ap_instance['channel'])
 
 	def is_version2(self):
-		if 'wpa2' in self.ap_instance['auth'].lower():
-			return True
-		else:
-			return False
+		return 'wpa2' in self.ap_instance['auth'].lower()
 
 	def auth_gen(self):
 		to_return = self.pmkid.dev_conn()
@@ -233,7 +237,7 @@ class pmkid_GEN:
 			pull.error("Password Not Found in Dictionary. Try enlarging it!")
 			sys.exit()
 		else:
-			pull.use("Password Found: %s%s%s" % (pull.BOLD, _pass, pull.END))
+			pull.use(f"Password Found: {pull.BOLD}{_pass}{pull.END}")
 			if V__:
 				pull.right("PMKID: ")
 				print(_hash_)
@@ -255,15 +259,14 @@ class Phazer:
 	def count_input(self):
 		while True:
 			try:
-				count = pull.question('Enter Your Target Number [q]uit/[n]: ')
-				return count
+				return pull.question('Enter Your Target Number [q]uit/[n]: ')
 			except:
 				pass
 
 	def get_input(self):
 		while True:
 			count = self.count_input()
-			if count == 'q' or count == 'Q':
+			if count in ['q', 'Q']:
 				sys.exit(0)
 			for AP in self.WiFiAP:
 				if str(AP['count']) == count:
@@ -279,11 +282,13 @@ class Phazer:
 
 	def save(self):
 		global WRITE__
-		
+
 		if WRITE__:
 			_wr = PcapWriter(WRITE__, append=False, sync=True)
 			_wr.write(self.THEPOL)
-			pull.use("Handshake >> [%s] Count [%s] %s[Saved]%s" % (pull.DARKCYAN+WRITE__+pull.END, str(len(self.THEPOL)), pull.GREEN, pull.END ))
+			pull.use(
+				f"Handshake >> [{pull.DARKCYAN + WRITE__ + pull.END}] Count [{len(self.THEPOL)}] {pull.GREEN}[Saved]{pull.END}"
+			)
 		else:
 			pull.error("Handshake not saved. Use -w, --write for saving handshakes. ")
 
@@ -295,10 +300,13 @@ class Phazer:
 		_pass, _pmk, _ptk, _mic = _crk.broot()
 
 		if _pass:
-			pull.use("Found: %s" % (_pass))
-			pull.right("PMK: "); print(_pmk)
-			pull.right("PTK: "); print(_ptk)
-			pull.right("MIC: "); print(_mic)
+			pull.use(f"Found: {_pass}")
+			pull.right("PMK: ")
+			print(_pmk)
+			pull.right("PTK: ")
+			print(_ptk)
+			pull.right("MIC: ")
+			print(_mic)
 
 		else:
 			pull.error("Password not Found! Try enlarging your dictionary!")
@@ -334,9 +342,10 @@ class Moder:
 		self._sniff = _sniff
 
 	def hand_mode_ext(self, _tgt, _ph):
-		pull.up("Verifying... Looking for %s[4 EAPOLs]%s" % (pull.BLUE, pull.END))
+		pull.up(f"Verifying... Looking for {pull.BLUE}[4 EAPOLs]{pull.END}")
 		_eap = eAPoL(_tgt['bssid'])
-		_pkts = rdpcap(_HANDSHAKE); _valid = False
+		_pkts = rdpcap(_HANDSHAKE)
+		_valid = False
 
 		for pkt in _pkts:
 			_yorn = _eap.check(pkt)
@@ -352,13 +361,18 @@ class Moder:
 
 	def hand_mode(self, _ph ,_tgt, _tm, _deauth):
 		if 'WPA' in _tgt['auth']:
-			self.interface_inst.stop_hopper = 1; time.sleep(1)
+			self.interface_inst.stop_hopper = 1
+			time.sleep(1)
 			self.interface_inst.put_channel(_tgt['channel'])
 			if not _HANDSHAKE:
-				pull.info("Changing Channel to %s %s[SuccessFul]%s" % (_tgt['channel'], pull.GREEN, pull.END))
+				pull.info(
+					f"Changing Channel to {_tgt['channel']} {pull.GREEN}[SuccessFul]{pull.END}"
+				)
 				_cls = self._sniff.shift._Shifter__ALSA_CLIENTS
-				_yorn = pull.question("AP Clients %s[%s]%s Scan Further?[Y/n] " % (pull.YELLOW, _tgt['clients'], pull.END))
-				if _yorn == 'y' or _yorn == 'Y':
+				_yorn = pull.question(
+					f"AP Clients {pull.YELLOW}[{_tgt['clients']}]{pull.END} Scan Further?[Y/n] "
+				)
+				if _yorn in ['y', 'Y']:
 					_cls = _ph.clients_sniff(_tgt['bssid'], _tgt['essid'], _tgt['channel'], _tm)
 				if len(_cls) >= 1:
 					_ph.sniper_shoot(_tgt['bssid'], _tgt['essid'], _tgt['channel'], _cls, _tm, _deauth)
@@ -396,7 +410,10 @@ class Moder:
 		if _silent.verify():
 			_silent.jam()
 		else:
-			pull.error("Not able to Find such network %s[%s]%s" % (pull.RED, _ap.replace(':', '').upper(), pull.END )); sys.exit(-1)
+			pull.error(
+				f"Not able to Find such network {pull.RED}[{_ap.replace(':', '').upper()}]{pull.END}"
+			)
+			sys.exit(-1)
 			
 
 ##########################
@@ -409,99 +426,96 @@ def grace_exit(sig, frame):
 	sys.exit(0)
 
 def _writer(options):
-	if options.write != None:
-		if os.path.isfile(options.write):
-			pull.special("File Already Exists! %s[%s]%s" % (pull.RED, options.write, pull.END))
-			sys.exit(-1)
-		else:
-			return options.write
-	else:
+	if options.write is None:
 		return str()
+	if not os.path.isfile(options.write):
+		return options.write
+	pull.special(f"File Already Exists! {pull.RED}[{options.write}]{pull.END}")
+	sys.exit(-1)
 
 def _handshake(options):
-	if options.handshake != None:
-		if os.path.isfile(options.handshake):
-			return options.handshake
-		else:
-			pull.error("No such File %s[%s]%s" % (pull.RED, options.handshake, pull.END))
-			sys.exit(-1)
-	else:
+	if options.handshake is None:
 		return str()
+	if os.path.isfile(options.handshake):
+		return options.handshake
+	pull.error(f"No such File {pull.RED}[{options.handshake}]{pull.END}")
+	sys.exit(-1)
 
 def _wordlister(options):
-	if options.dictionary == None:
+	if options.dictionary is None:
 		pull.error("No dictionary was provided. Use -h or --help for more information. ")
 		sys.exit(-1)
+	elif os.path.isfile(options.dictionary):
+		_lns = open(options.dictionary).read().splitlines()
+		pull.info("Path: {%s} Lines {%s}" % (pull.BLUE+options.dictionary+pull.END, pull.BLUE+str(len(_lns))+pull.END))
+		return options.dictionary
 	else:
-		if os.path.isfile(options.dictionary):
-			_lns = open(options.dictionary).read().splitlines()
-			pull.info("Path: {%s} Lines {%s}" % (pull.BLUE+options.dictionary+pull.END, pull.BLUE+str(len(_lns))+pull.END))
-			return options.dictionary
-		else:
-			pull.error('No such File: %s' % (options.dictionary))
-			sys.exit(-1)
+		pull.error(f'No such File: {options.dictionary}')
+		sys.exit(-1)
 
 def _typer(options):
-	if not options.type == None:
-		if options.type == 'handshake':
-			return 1
-		elif options.type == 'pmkid':
-			return 2
-		else:
-			pull.error('Unknown Captured type specifed. Use --list-types option to see the list.'); sys.exit(-1)
-	else:
+	if options.type is None:
 		pull.special("No Capture Type Specified. See the manual (-h, --help)"); sys.exit(-1)
+
+	elif options.type == 'handshake':
+		return 1
+	elif options.type == 'pmkid':
+		return 2
+	else:
+		pull.error('Unknown Captured type specifed. Use --list-types option to see the list.'); sys.exit(-1)
 
 def _channel_verifier(ch):
 	__channels = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
-	if ch in __channels:
-		return ch
-	else:
-		return False
+	return ch if ch in __channels else False
 
 def _channeler(options):
-	if options.interface != None:
+	if options.interface is None:
+		pull.error('Interface Required. Please supply -i argument.')
+		sys.exit(-1)
+
+	else:
 		iface = interface(options.interface)
 		if iface.check_mon == False:
 			pull.error(iface.check_help)
 			sys.exit(-1)
-		if options.channel == None:
-			pull.special("Channel Specified: %s Hopper Status [%s]" % (pull.RED+"NONE"+pull.END, pull.GREEN+"Running"+pull.END))
+		if options.channel is None:
+			pull.special(
+				f"Channel Specified: {pull.RED}NONE{pull.END} Hopper Status [{pull.GREEN}Running{pull.END}]"
+			)
 			iface.hopper()
+		elif _channel_verifier(options.channel):
+			iface.put_channel(options.channel)
+			pull.info(
+				f"Channel Specified: {pull.GREEN + str(options.channel) + pull.END} Hopper Status [{pull.GREEN}Stopped{pull.END}]"
+			)
 		else:
-			if _channel_verifier(options.channel):
-				iface.put_channel(options.channel)
-				pull.info("Channel Specified: %s Hopper Status [%s]" % (pull.GREEN+str(options.channel)+pull.END, pull.GREEN+"Stopped"+pull.END))
-			else:
-				pull.special('Invalid Channel Detected! Hopper Status [%s]' % (pull.GREEN+"Running"+pull.END))
-				iface.hopper()
+			pull.special(
+				f'Invalid Channel Detected! Hopper Status [{pull.GREEN}Running{pull.END}]'
+			)
+			iface.hopper()
 		return iface
-	else:
-		pull.error('Interface Required. Please supply -i argument.')
-		sys.exit(-1)
 
 def _silfer(iface, options):
-	if options.essid != None or options.bssid != None:
-		if options.essid != None and options.bssid != None:
-			sniffer = Sniffer(iface, options.bssid, options.essid)
-		elif options.bssid != None:
-			sniffer = Sniffer(iface, bssid=options.bssid)
-		elif options.essid != None:
-			sniffer = Sniffer(iface, essid=options.essid)
+	if options.essid != None:
+		return (
+			Sniffer(iface, options.bssid, options.essid)
+			if options.bssid != None
+			else Sniffer(iface, essid=options.essid)
+		)
+	elif options.bssid != None:
+		return Sniffer(iface, bssid=options.bssid)
 	else:
-		sniffer = Sniffer(iface)
-
-	return sniffer
+		return Sniffer(iface)
 
 def _crack_filer(options):
-	if options.read == None:
-		pull.special("Please Specify your capture path. See manual!"); sys.exit(-1)
+	if options.read is None:
+		pull.special("Please Specify your capture path. See manual!")
 	else:
 		_file = options.read
 		if os.path.isfile(_file):
 			return _file
-		else:
-			pull.special("No Such File: %s[%s]%s" % (pull.RED, _file, pull.END)); sys.exit(-1)
+		pull.special(f"No Such File: {pull.RED}[{_file}]{pull.END}")
+	sys.exit(-1)
 
 def _detargeter(options):
 	_ap, _cl = '', ''
@@ -542,11 +556,11 @@ def main():
 	parser.add_option('', '--type', dest='type', type='string', help="Type of Cracking")
 	parser.add_option('', '--list-types', dest='listTypes', default=False, action="store_true", help="List of Available types")
 	parser.add_option('-r', '--read', dest='read', type='string', help='Read capture in mode 3')
-	
+
 	parser.add_option('', '--ap', dest='ap', type="string", help="Access Point BSSID")
 	parser.add_option('', '--client', dest='client', type="string", help="STA (Client) BSSID")
 	parser.add_option('-0', '--count', dest='deauthcount', type="int", help="Number of Deauth Frames to Send")
-	
+
 	(options, args) = parser.parse_args()
 
 	if options.help and not(options.mode):
@@ -572,14 +586,15 @@ def main():
 	elif options.mode == 2:
 		if options.help:
 			pull.help(2); sys.exit(0)
-		WRITE__ = _writer(options); DICTIONARY = _wordlister(options)
-		iface = _channeler(options); _silf = _silfer(iface, options)
+		WRITE__ = _writer(options)
+		DICTIONARY = _wordlister(options)
+		iface = _channeler(options)
+		_silf = _silfer(iface, options)
 		pmk = pmkid_GEN(iface, Phazer(_silf).get_input(), options.frames)
 		signal(SIGINT, grace_exit)
 		if pmk.is_version2():
-			if pmk.auth_gen():
-				if pmk.asso_gen():
-					pmk.lets_crack()
+			if pmk.auth_gen() and pmk.asso_gen():
+				pmk.lets_crack()
 		else:
 			pull.special("This attack only works for WPA2 networks")
 			sys.exit(0)

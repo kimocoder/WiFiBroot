@@ -118,26 +118,23 @@ class Shifter:
 						layer_data__['auth'] += '/WPA'
 					cipher, psk = self.check_cipher_221( ELTLAYERS[dig] )
 					layer_data__['cipher'], layer_data__['psk'] = cipher, psk
-				else:
-					pass
 			except IndexError:
 				break
 		if not layer_data__['auth']:
-			if 'privacy' in cap:
-				layer_data__['auth'] = 'WEP'
-			else:
-				layer_data__['auth'] = 'OPEN'
+			layer_data__['auth'] = 'WEP' if 'privacy' in cap else 'OPEN'
 		return layer_data__
 
 	def dBM_sig(self, pkt):
 		if pkt.haslayer(RadioTap):
 			extra = pkt.notdecoded
-			dbm_sig = '?'
-			for p in extra:
-				if -(256-ord(p)) > -90 and -(256-ord(p)) < -20:
-					dbm_sig = -(256-ord(p))
-					break
-			return dbm_sig
+			return next(
+				(
+					-(256 - ord(p))
+					for p in extra
+					if -(256 - ord(p)) > -90 and -(256 - ord(p)) < -20
+				),
+				'?',
+			)
 
 	def filtertify(self, bssid, __data):
 		if self.bss != None and self.ess != None:
@@ -150,42 +147,51 @@ class Shifter:
 			return True
 
 	def clients_garbage(self, pkt):
-		if pkt.haslayer(Dot11) and pkt.getlayer(Dot11).type == long(2) and not pkt.haslayer(EAPOL):
-			_sn = pkt.getlayer(Dot11).addr2
-			_rc = pkt.getlayer(Dot11).addr1
+		if (
+			not pkt.haslayer(Dot11)
+			or pkt.getlayer(Dot11).type != long(2)
+			or pkt.haslayer(EAPOL)
+		):
+			return
+		_sn = pkt.getlayer(Dot11).addr2
+		_rc = pkt.getlayer(Dot11).addr1
 
-			_tgt = None
+		_tgt = None
 
-			if _sn in self.bss_counter:
-				_tgt, _ap = _rc, _sn
-			elif _rc in self.bss_counter:
-				_tgt, _ap = _sn, _rc
+		if _sn in self.bss_counter:
+			_tgt, _ap = _rc, _sn
+		elif _rc in self.bss_counter:
+			_tgt, _ap = _sn, _rc
 
-			if _tgt and _tgt not in self.clients:
-				for cell in self.cells:
-					for _key, _val in cell.items():
-						if _key == 'bssid' and _val == _ap:
-							if not (_tgt.replace(':','').lower() in self.__BLACKLIST):
-								cell['clients'] += 1; self.clients.append(_tgt)
-								self.__ALSA_CLIENTS[_val].append( (_tgt, self.dBM_sig(pkt)) )
+		if _tgt and _tgt not in self.clients:
+			for cell in self.cells:
+				for _key, _val in cell.items():
+					if (
+						_key == 'bssid'
+						and _val == _ap
+						and _tgt.replace(':', '').lower() not in self.__BLACKLIST
+					):
+						cell['clients'] += 1
+						self.clients.append(_tgt)
+						self.__ALSA_CLIENTS[_val].append( (_tgt, self.dBM_sig(pkt)) )
 
 	def beac_shift(self, pkt):
-		if pkt.haslayer(Dot11Beacon):
-			bssid = pkt.getlayer(Dot11).addr2
-			cap = pkt.sprintf("{Dot11Beacon:%Dot11Beacon.cap%}").split('+')
-			ELTLAYERS = pkt.getlayer(Dot11Elt)
-			if bssid not in self.bss_counter:
-				self.bss_counter.append(bssid)
-				layer_data__ = self.enc_shift(cap, ELTLAYERS)
-				s_or_n = self.filtertify(bssid.lower(), layer_data__)
-				if s_or_n:
-					self.cells.append({'essid': unicode(layer_data__['essid']), 'bssid': unicode(bssid), 'channel': unicode(layer_data__['channel']), 'auth': unicode(layer_data__['auth']), \
+		if not pkt.haslayer(Dot11Beacon):
+			return
+		bssid = pkt.getlayer(Dot11).addr2
+		cap = pkt.sprintf("{Dot11Beacon:%Dot11Beacon.cap%}").split('+')
+		ELTLAYERS = pkt.getlayer(Dot11Elt)
+		if bssid not in self.bss_counter:
+			self.bss_counter.append(bssid)
+			layer_data__ = self.enc_shift(cap, ELTLAYERS)
+			if s_or_n := self.filtertify(bssid.lower(), layer_data__):
+				self.cells.append({'essid': unicode(layer_data__['essid']), 'bssid': unicode(bssid), 'channel': unicode(layer_data__['channel']), 'auth': unicode(layer_data__['auth']), \
 						'cipher': unicode(layer_data__['cipher']), 'psk': unicode(layer_data__['psk']), 'pwr': self.dBM_sig(pkt), 'beacon': pkt, 'vendor': unicode(org(bssid).org), 'clients': 0})
-					self.__ALSA_CLIENTS[bssid] = []
-			else:
-				for ap in self.cells:
-					if ap['bssid'] == bssid:
-						ap['pwr'] = self.dBM_sig(pkt)
+				self.__ALSA_CLIENTS[bssid] = []
+		else:
+			for ap in self.cells:
+				if ap['bssid'] == bssid:
+					ap['pwr'] = self.dBM_sig(pkt)
 
 
 	def ssid_shift(self, pkt):

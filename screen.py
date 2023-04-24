@@ -43,7 +43,7 @@ class Display:
 	def cch(self, ch):
 		ch = str(ch)
 		if len(ch) == 1:
-			ch = '0'+ch
+			ch = f'0{ch}'
 		return ch
 
 	def Shifter(self, sniffer, iface_instance):
@@ -56,15 +56,13 @@ class Display:
 		while not self.shifter_break:
 			tabulator__, __sig_LIST, self.__WiFiAP, __sig_FOUND = [], [], [], []
 
-			for ap in sniffer.results():
-				__sig_LIST.append(ap['pwr'])
-
+			__sig_LIST.extend(ap['pwr'] for ap in sniffer.results())
 			__sig_LIST = sorted(__sig_LIST, reverse=True)
 			count = 1
 
 			for sig in __sig_LIST:
 				for ap in sniffer.results():
-					if ap['pwr'] == sig and not ap['bssid'] in __sig_FOUND:
+					if ap['pwr'] == sig and ap['bssid'] not in __sig_FOUND:
 						__sig_FOUND.append(ap['bssid'])
 						ap['count'] = count
 						count += 1
@@ -73,16 +71,16 @@ class Display:
 			for ap in self.__WiFiAP:
 				if self.verbose:
 					tabulator__.append([ap['count'], ap['essid'], ap['pwr'], ap['auth'], ap['cipher'], \
-							ap['psk'], ap['channel'], ap['bssid'].upper(), ap['vendor'], ap['clients']])
+								ap['psk'], ap['channel'], ap['bssid'].upper(), ap['vendor'], ap['clients']])
 				else:
 					tabulator__.append([ap['count'], ap['essid'], ap['pwr'], ap['auth'], ap['cipher'], \
-							ap['psk'], ap['channel'], ap['bssid'].upper()])
+								ap['psk'], ap['channel'], ap['bssid'].upper()])
 
 			self.screen.addstr(0, 0, "[%s] Channel [%s] Time Elapsed [%d] Networks Found"\
-									% (self.cch(iface_instance.cch), self.c_time(), len(tabulator__)))
+										% (self.cch(iface_instance.cch), self.c_time(), len(tabulator__)))
 			self.screen.addstr(1, 0, "\n"+tabulate(tabulator__, headers=__HEADERS)+"\n")
 			self.screen.refresh()
-			
+
 		self.Shifter_stopped = not False
 
 	def clear(self):

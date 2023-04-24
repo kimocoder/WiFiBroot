@@ -35,15 +35,12 @@ class DEAUTH:
 		self.ap = _ap
 		self.cl = _cl
 		self.count = _count
-		self.unlimited = True if _count == 0 else False
+		self.unlimited = _count == 0
 		self.pull = _pull
 		self.verbose = _v
 
 	def verify(self):
-		if self.__AVAIL:
-			return True
-		else:
-			return False
+		return bool(self.__AVAIL)
 
 	def locate(self):
 		if not self.ap:
@@ -70,7 +67,7 @@ class DEAUTH:
 			while True:
 				self.flood_ap_cl(_pkt_ap, _pkt_cl)
 		else:
-			for _count in range(0, self.count):
+			for _count in range(self.count):
 				self.flood_ap_cl(_pkt_ap, _pkt_cl)
 
 	def flood_ap_cl(self, _pkt_ap, _pkt_cl):
@@ -97,7 +94,7 @@ class DEAUTH:
 			while True:
 				self.flood_ap(_pkt_ap, _broadct)
 		else:
-			for _count in range(0, self.count):
+			for _count in range(self.count):
 				self.flood_ap(_pkt_ap, _broadct)
 
 	def flood_ap(self, _pkt, _br):
@@ -145,7 +142,7 @@ class DEAUTH:
 	def jam(self):
 		if self.ap and self.cl:
 			self.forge_ap_cl()
-		elif self.ap and not(self.cl):
+		elif self.ap:
 			self.forge_ap()
 		else:
 			self.flood()
